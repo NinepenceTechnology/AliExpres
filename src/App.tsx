@@ -51,15 +51,83 @@ export default function App() {
   const [newMessage, setNewMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const [typingPreview, setTypingPreview] = useState<string | null>(null);
+  const typingTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
+
+  const clearAllTypingTimeouts = () => {
+    typingTimeoutsRef.current.forEach(clearTimeout);
+    typingTimeoutsRef.current = [];
+    setTypingPreview(null);
+  };
+
+  const enqueueBotResponse = (
+    finalText: string, 
+    nextStep: number, 
+    imageUrl?: string, 
+    customOnComplete?: () => void
+  ) => {
+    clearAllTypingTimeouts();
+    setIsTyping(true);
+    setTypingPreview(null);
+
+    // 0s to 3s: only bouncing dots (typingPreview = null)
+    
+    // at 3s: draft 35% of the text
+    const t1 = setTimeout(() => {
+      const partialText = finalText.slice(0, Math.round(finalText.length * 0.35));
+      setTypingPreview(partialText || "Digitando...");
+    }, 3000);
+
+    // at 6s: draft 70% of the text
+    const t2 = setTimeout(() => {
+      const partialText = finalText.slice(0, Math.round(finalText.length * 0.7));
+      setTypingPreview(partialText || "Digitando...");
+    }, 6000);
+
+    // at 9s: backspace/erasing starts! Change typingPreview to a very small slice
+    const t3 = setTimeout(() => {
+      setTypingPreview(finalText.slice(0, Math.min(finalText.length, 5)) || "Dig");
+    }, 9000);
+
+    // at 11s: completely erased (empty string)
+    const t4 = setTimeout(() => {
+      setTypingPreview("");
+    }, 11000);
+
+    // at 13s: bouncing dots only (typingPreview = null)
+    const t5 = setTimeout(() => {
+      setTypingPreview(null);
+    }, 13000);
+
+    // at 15s: deliver full final message
+    const t6 = setTimeout(() => {
+      setChatMessages(prev => [...prev, { role: 'bot', text: finalText, imageUrl }]);
+      setChatStep(nextStep);
+      setIsTyping(false);
+      setTypingPreview(null);
+      if (customOnComplete) {
+        customOnComplete();
+      }
+    }, 15000);
+
+    typingTimeoutsRef.current = [t1, t2, t3, t4, t5, t6];
+  };
+
   useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [chatMessages, isTyping]);
+    const scrollToBottom = () => {
+      if (chatEndRef.current) {
+        chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+    scrollToBottom();
+    // Fallback for transition delay
+    const timer = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timer);
+  }, [chatMessages, isTyping, isComplaintOpen]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || isTyping) return;
+    if (!newMessage.trim() || isTyping || chatStep === 17) return;
 
     const userMsg = newMessage;
     setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
@@ -67,175 +135,143 @@ export default function App() {
 
     if (chatStep === 1) {
       // Name entered -> Ask for email
-      setIsTyping(true);
-      setTimeout(() => {
-        setChatMessages(prev => [...prev, { 
-          role: 'bot', 
-          text: 'Por favor, insira o seu e-mail:' 
-        }]);
-        setChatStep(2);
-        setIsTyping(false);
-      }, 3000);
+      enqueueBotResponse('Por favor, insira o seu e-mail:', 2);
     } else if (chatStep === 2) {
       // Email entered -> Ask for action (RASTREAMENTO / INFORMAÇÕES / RECLAMAÇÕES)
-      setIsTyping(true);
-      setTimeout(() => {
-        setChatMessages(prev => [...prev, { 
-          role: 'bot', 
-          text: 'O que deseja fazer? Selecione uma das opções abaixo:' 
-        }]);
-        setChatStep(3);
-        setIsTyping(false);
-      }, 3000);
+      enqueueBotResponse('O que deseja fazer? Selecione uma das opções abaixo:', 3);
     } else if (chatStep === 4) {
-      // Product code entered -> Bot says "Aguarde..." and 10s later delivers cargo tracking/ship info
+      // Product code entered -> Bot says "Aguarde..." and delivers tracking/ship info
       setChatMessages(prev => [...prev, { role: 'bot', text: 'Aguarde...' }]);
-      setIsTyping(true);
-      setTimeout(() => {
-        setChatMessages(prev => [...prev, { 
-          role: 'bot', 
-          text: 'Produto já está em Moçambique no Porto da Beira, O Navio MSC MIRA V já deixou o porto no dia 23 de Junho de 2026. Qual é a reclamação?' 
-        }]);
-        setChatStep(5);
-        setIsTyping(false);
-      }, 10000); // 10 seconds delay as requested
+      enqueueBotResponse(
+        'Produto já está em Moçambique no Porto da Beira, O Navio MSC MIRA V já deixou o porto no dia 23 de Junho de 2026. Qual é a reclamação?', 
+        5
+      );
     } else if (chatStep === 5) {
-      // Complaint entered -> Bot says "Aguarde." and 10s later explains damage
+      // Complaint entered -> Bot says "Aguarde." and explains damage
       setChatMessages(prev => [...prev, { role: 'bot', text: 'Aguarde.' }]);
-      setIsTyping(true);
-      setTimeout(() => {
-        setChatMessages(prev => [...prev, { 
-          role: 'bot', 
-          text: 'O contentor contendo o producto em questão foi danificado durante o manuseamento. Este está sobre investigação para auferir as responsabilidades sobre o mesmo e os danos aos produtos.' 
-        }]);
-        setChatStep(6);
-        setIsTyping(false);
-      }, 10000); // 10 seconds delay as requested
+      enqueueBotResponse(
+        'O contentor contendo o producto em questão foi danificado durante o manuseamento. Este está sobre investigação para auferir as responsabilidades sobre o mesmo e os danos aos produtos.', 
+        6
+      );
     } else if (chatStep === 6) {
       // User asks "por quanto tempo dura?" -> Bot answers about SGS/INTERTEK/insurance
-      setIsTyping(true);
-      setTimeout(() => {
-        setChatMessages(prev => [...prev, { 
-          role: 'bot', 
-          text: 'Isso depende das entidades responsáveis (SGS e INTERTEK). Se as cargas tiverem danos, um seguro é acionado e o valor de compra é estornado.' 
-        }]);
-        setChatStep(7);
-        setIsTyping(false);
-
-        // Auto-proceed with the next requested final message with a natural secondary typing delay
-        setTimeout(() => {
-          setIsTyping(true);
-          setTimeout(() => {
-            setChatMessages(prev => [...prev, {
-              role: 'bot',
-              text: 'A estimativa da investigação é de uma a duas semanas, operando em dias úteis, peço que mantenha atenção constante no WhatsApp e e-mail. Entraremos em contacto. Vejo que esta encomenda está com prazo de entrega ultrapassado. Vamos marcar o seu caso como um caso de maior relevância.'
-            }]);
-            setIsTyping(false);
-
-            // Auto-proceed to confirm contacts with another 5-second typing delay
-            setTimeout(() => {
-              setIsTyping(true);
-              setTimeout(() => {
-                setChatMessages(prev => [...prev, {
-                  role: 'bot',
-                  text: 'Confirme os contactos:\nWhatsapp 846348589\nemail: florindoninepence@gmail.com'
-                }]);
-                setChatStep(8); // STOP HERE! The chat will wait for a response in step 8
-                setIsTyping(false);
-              }, 5000);
-            }, 1500);
-
-          }, 5000);
-        }, 1500);
-      }, 5000);
+      enqueueBotResponse(
+        'Isso depende das entidades responsáveis (SGS e INTERTEK). Se as cargas tiverem danos, um seguro é acionado e o valor de compra é estornado.',
+        7,
+        undefined,
+        () => {
+          // Auto-proceed with the next requested final message
+          enqueueBotResponse(
+            'A estimativa da investigação é de uma a duas semanas, operando em dias úteis, peço que mantenha atenção constante no WhatsApp e e-mail. Entraremos em contacto. Vejo que esta encomenda está com prazo de entrega ultrapassado. Vamos marcar o seu caso como um caso de maior relevância.',
+            7.5,
+            undefined,
+            () => {
+              // Auto-proceed to confirm contacts
+              enqueueBotResponse(
+                'Confirme os contactos:\nWhatsapp 846348589\nemail: florindoninepence@gmail.com',
+                8
+              );
+            }
+          );
+        }
+      );
     } else if (chatStep === 8) {
       // User confirmed contacts. Start the final image sequence!
-      setIsTyping(true);
-      setTimeout(() => {
-        setChatMessages(prev => [...prev, {
-          role: 'bot',
-          text: 'Aguarde temos imagens do contentor e do equipamento apenas aguardamos por laudo da inspecção.'
-        }]);
-        setIsTyping(false);
-
-        // Wait exactly 15 seconds displaying typing indicator before showing Contentor image
-        setTimeout(() => {
-          setIsTyping(true);
-          setTimeout(() => {
-            setChatMessages(prev => [...prev, {
-              role: 'bot',
-              text: 'Imagem do Contentor Danificado:',
-              imageUrl: contentorImg
-            }]);
-            setIsTyping(false);
-
-            // Wait exactly 5 seconds displaying typing indicator before showing Drone image
-            setTimeout(() => {
-              setIsTyping(true);
-              setTimeout(() => {
-                setChatMessages(prev => [...prev, {
-                  role: 'bot',
-                  text: 'Imagem do Equipamento (Drone) Danificado:',
-                  imageUrl: droneImg
-                }]);
-                setIsTyping(false);
-
-                // Wait exactly 5 seconds displaying typing indicator before showing final refund details
-                setTimeout(() => {
-                  setIsTyping(true);
-                  setTimeout(() => {
-                    setChatMessages(prev => [...prev, {
-                      role: 'bot',
-                      text: 'Porém com os danos do equipamento sugerimos preecher o documento depedido de extorno que irá receber no seu email: florindoninepence@gmail.com e o valor será extornado em 15 dias uteis a contar com a data de pedido de recompensa.'
-                    }]);
-                    setIsTyping(false);
-
-                    // Wait exactly 5 seconds displaying typing indicator before showing final apology closing
-                    setTimeout(() => {
-                      setIsTyping(true);
-                      setTimeout(() => {
-                        setChatMessages(prev => [...prev, {
-                          role: 'bot',
-                          text: 'Devido ao atraso pedimos sinceras desculpas e uma vez mais garanto que o seu caso será considerado de extrema urgência.'
-                        }]);
-                        setIsTyping(false);
-                        setChatStep(9); // Completed
-                      }, 5000);
-                    }, 1500);
-
-                  }, 5000);
-                }, 1500);
-
-              }, 5000);
-            }, 1500);
-
-          }, 15000); // 15 seconds wait for Contentor.png as requested
-        }, 1500);
-
-      }, 4000);
+      enqueueBotResponse(
+        'Aguarde temos imagens do contentor e do equipamento apenas aguardamos por laudo da inspecção.',
+        8.2,
+        undefined,
+        () => {
+          enqueueBotResponse(
+            'Imagem do Contentor Danificado:',
+            8.4,
+            contentorImg,
+            () => {
+              enqueueBotResponse(
+                'Imagem do Equipamento (Drone) Danificado:',
+                8.6,
+                droneImg,
+                () => {
+                  enqueueBotResponse(
+                    'Porém com os danos do equipamento sugerimos preecher o documento depedido de extorno que irá receber no seu email: florindoninepence@gmail.com e o valor será extornado em 15 dias uteis a contar com a data de pedido de recompensa.',
+                    8.8,
+                    undefined,
+                    () => {
+                      enqueueBotResponse(
+                        'Devido ao atraso pedimos sinceras desculpas e uma vez mais garanto que o seu caso será considerado de extrema urgência.',
+                        9
+                      );
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    } else if (chatStep === 9) {
+      enqueueBotResponse(
+        'As imagens acima são feitas com o fundo desfocado para não comprometer informações de terceiros. Uma vez mais, pedimos sinceras desculpas e garantimos que pode continuar a importar via nosso website. O que aconteceu é apenas erro de manuseamento. Não exite em nos contactar.',
+        15,
+        undefined,
+        () => {
+          // "Deseja saber algo mais?" is automatically asked right after the previous message
+          enqueueBotResponse(
+            'Deseja saber algo mais?',
+            16
+          );
+        }
+      );
+    } else if (chatStep === 11) {
+      enqueueBotResponse(
+        'Todas opções de envio são possíveis desde que haja o producto ainda em stock e as despesas de envio por conta do cliente.',
+        12
+      );
+    } else if (chatStep === 12) {
+      enqueueBotResponse(
+        'Confirmo que temos algumas unidades. Iremos contactar o departamento de enmpacotamentos e envio, iremos fazer contacto por email para dar os detalhes de pagamentos de frete.',
+        13
+      );
+    } else if (chatStep === 13) {
+      enqueueBotResponse(
+        'confrirma os contactos:\nWhatsapp: 846348589\nemail: florindoninepence@gmail.com',
+        14
+      );
+    } else if (chatStep === 14) {
+      enqueueBotResponse(
+        'Todos dados serão enviados por email em até 1hora. Agradecemos por contactar e pedimos sinceras desculpas pelos transtornos causados',
+        15,
+        undefined,
+        () => {
+          // "Deseja saber algo mais?" is automatically asked right after the previous message
+          enqueueBotResponse(
+            'Deseja saber algo mais?',
+            16
+          );
+        }
+      );
+    } else if (chatStep === 16) {
+      enqueueBotResponse(
+        'Atendimento encerrado. Obrigado por nos contactar!',
+        17
+      );
     }
   };
 
   const selectLanguage = (lang: string) => {
     if (isTyping) return;
     setChatMessages(prev => [...prev, { role: 'user', text: lang }]);
-    setIsTyping(true);
-    setTimeout(() => {
-      setChatMessages(prev => [...prev, { role: 'bot', text: 'Qual é o seu nome de usuário?' }]);
-      setChatStep(1);
-      setIsTyping(false);
-    }, 3000);
+    enqueueBotResponse('Qual é o seu nome de usuário?', 1);
   };
 
   const selectAction = (action: string) => {
     if (isTyping) return;
     setChatMessages(prev => [...prev, { role: 'user', text: action }]);
-    setIsTyping(true);
-    setTimeout(() => {
-      setChatMessages(prev => [...prev, { role: 'bot', text: 'Indique o código do produto:' }]);
-      setChatStep(4);
-      setIsTyping(false);
-    }, 3000);
+    if (action === 'INFORMAÇÕES') {
+      enqueueBotResponse('O que deseja saber?', 11);
+    } else {
+      enqueueBotResponse('Indique o código do produto:', 4);
+    }
   };
 
   const filteredProducts = useMemo(() => {
@@ -583,6 +619,7 @@ export default function App() {
                   onClick={() => {
                     setIsComplaintOpen(false);
                     setChatStep(0);
+                    clearAllTypingTimeouts();
                     setChatMessages([
                       { role: 'bot', text: 'Bem vindo / Welcome' },
                       { role: 'bot', text: 'seleciona a Língua / Select Language' }
@@ -626,6 +663,12 @@ export default function App() {
                       )}
                     </div>
                   ))}
+                  {typingPreview !== null && typingPreview !== "" && (
+                    <div className="max-w-[85%] sm:max-w-[80%] p-3.5 rounded-2xl text-sm whitespace-pre-line flex flex-col gap-2 shadow-sm transition-all duration-200 bg-gray-100 text-gray-800 self-start rounded-tl-none italic opacity-85">
+                      <span>{typingPreview}</span>
+                      <span className="text-[10px] text-gray-400 self-end">Digitando...</span>
+                    </div>
+                  )}
                   {isTyping && (
                     <div className="bg-gray-100 text-gray-800 self-start rounded-2xl rounded-tl-none p-3.5 text-sm flex gap-1.5 items-center w-fit shadow-sm">
                       <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce"></span>
@@ -678,14 +721,14 @@ export default function App() {
                   <input 
                     type="text" 
                     className="flex-grow border border-gray-300 rounded-full px-4 py-2.5 outline-none focus:ring-2 focus:ring-ali-orange disabled:bg-gray-50 text-sm"
-                    placeholder={isTyping ? "Aguardando resposta..." : "Digite sua mensagem..."}
+                    placeholder={chatStep === 17 ? "Atendimento encerrado." : isTyping ? "Aguardando resposta..." : "Digite sua mensagem..."}
                     value={newMessage}
                     onChange={e => setNewMessage(e.target.value)}
-                    disabled={(chatStep === 0 && chatMessages.length === 2) || chatStep === 3 || isTyping}
+                    disabled={(chatStep === 0 && chatMessages.length === 2) || chatStep === 3 || isTyping || chatStep === 17}
                   />
                   <button 
                     type="submit"
-                    disabled={(chatStep === 0 && chatMessages.length === 2) || chatStep === 3 || isTyping}
+                    disabled={(chatStep === 0 && chatMessages.length === 2) || chatStep === 3 || isTyping || chatStep === 17}
                     className="bg-ali-orange text-white p-2.5 rounded-full hover:bg-ali-orange-hover transition-colors disabled:opacity-50 flex items-center justify-center flex-shrink-0"
                   >
                     <Send size={18} />
