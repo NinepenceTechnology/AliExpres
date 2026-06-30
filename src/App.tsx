@@ -64,42 +64,43 @@ export default function App() {
     finalText: string, 
     nextStep: number, 
     imageUrl?: string, 
-    customOnComplete?: () => void
+    customOnComplete?: () => void,
+    duration: number = 15000
   ) => {
     clearAllTypingTimeouts();
     setIsTyping(true);
     setTypingPreview(null);
 
-    // 0s to 3s: only bouncing dots (typingPreview = null)
+    // 0 to duration * 0.20: bouncing dots (typingPreview = null)
     
-    // at 3s: draft 35% of the text
+    // at 20% of duration: draft 35% of the text
     const t1 = setTimeout(() => {
       const partialText = finalText.slice(0, Math.round(finalText.length * 0.35));
       setTypingPreview(partialText || "Digitando...");
-    }, 3000);
+    }, duration * 0.20);
 
-    // at 6s: draft 70% of the text
+    // at 40% of duration: draft 70% of the text
     const t2 = setTimeout(() => {
       const partialText = finalText.slice(0, Math.round(finalText.length * 0.7));
       setTypingPreview(partialText || "Digitando...");
-    }, 6000);
+    }, duration * 0.40);
 
-    // at 9s: backspace/erasing starts! Change typingPreview to a very small slice
+    // at 60% of duration: backspace/erasing starts! Change typingPreview to a very small slice
     const t3 = setTimeout(() => {
       setTypingPreview(finalText.slice(0, Math.min(finalText.length, 5)) || "Dig");
-    }, 9000);
+    }, duration * 0.60);
 
-    // at 11s: completely erased (empty string)
+    // at 73% of duration: completely erased (empty string)
     const t4 = setTimeout(() => {
       setTypingPreview("");
-    }, 11000);
+    }, duration * 0.73);
 
-    // at 13s: bouncing dots only (typingPreview = null)
+    // at 86% of duration: bouncing dots only (typingPreview = null)
     const t5 = setTimeout(() => {
       setTypingPreview(null);
-    }, 13000);
+    }, duration * 0.86);
 
-    // at 15s: deliver full final message
+    // at 100% of duration: deliver full final message
     const t6 = setTimeout(() => {
       setChatMessages(prev => [...prev, { role: 'bot', text: finalText, imageUrl }]);
       setChatStep(nextStep);
@@ -108,7 +109,7 @@ export default function App() {
       if (customOnComplete) {
         customOnComplete();
       }
-    }, 15000);
+    }, duration);
 
     typingTimeoutsRef.current = [t1, t2, t3, t4, t5, t6];
   };
@@ -127,31 +128,36 @@ export default function App() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || isTyping || chatStep === 17) return;
+    if (!newMessage.trim() || isTyping || chatStep === 18) return;
 
     const userMsg = newMessage;
     setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setNewMessage('');
-
     if (chatStep === 1) {
       // Name entered -> Ask for email
-      enqueueBotResponse('Por favor, insira o seu e-mail:', 2);
+      enqueueBotResponse('Por favor, insira o seu e-mail:', 2, undefined, undefined, 15000);
     } else if (chatStep === 2) {
       // Email entered -> Ask for action (RASTREAMENTO / INFORMAÇÕES / RECLAMAÇÕES)
-      enqueueBotResponse('O que deseja fazer? Selecione uma das opções abaixo:', 3);
+      enqueueBotResponse('O que deseja fazer? Selecione uma das opções abaixo:', 3, undefined, undefined, 15000);
     } else if (chatStep === 4) {
       // Product code entered -> Bot says "Aguarde..." and delivers tracking/ship info
       setChatMessages(prev => [...prev, { role: 'bot', text: 'Aguarde...' }]);
       enqueueBotResponse(
         'Produto já está em Moçambique no Porto da Beira, O Navio MSC MIRA V já deixou o porto no dia 23 de Junho de 2026. Qual é a reclamação?', 
-        5
+        5,
+        undefined,
+        undefined,
+        20000
       );
     } else if (chatStep === 5) {
       // Complaint entered -> Bot says "Aguarde." and explains damage
       setChatMessages(prev => [...prev, { role: 'bot', text: 'Aguarde.' }]);
       enqueueBotResponse(
         'O contentor contendo o producto em questão foi danificado durante o manuseamento. Este está sobre investigação para auferir as responsabilidades sobre o mesmo e os danos aos produtos.', 
-        6
+        6,
+        undefined,
+        undefined,
+        20000
       );
     } else if (chatStep === 6) {
       // User asks "por quanto tempo dura?" -> Bot answers about SGS/INTERTEK/insurance
@@ -169,11 +175,16 @@ export default function App() {
               // Auto-proceed to confirm contacts
               enqueueBotResponse(
                 'Confirme os contactos:\nWhatsapp 846348589\nemail: florindoninepence@gmail.com',
-                8
+                8,
+                undefined,
+                undefined,
+                15000
               );
-            }
+            },
+            20000
           );
-        }
+        },
+        15000
       );
     } else if (chatStep === 8) {
       // User confirmed contacts. Start the final image sequence!
@@ -199,15 +210,22 @@ export default function App() {
                     () => {
                       enqueueBotResponse(
                         'Devido ao atraso pedimos sinceras desculpas e uma vez mais garanto que o seu caso será considerado de extrema urgência.',
-                        9
+                        9,
+                        undefined,
+                        undefined,
+                        15000
                       );
-                    }
+                    },
+                    20000
                   );
-                }
+                },
+                15000
               );
-            }
+            },
+            15000
           );
-        }
+        },
+        15000
       );
     } else if (chatStep === 9) {
       enqueueBotResponse(
@@ -218,42 +236,76 @@ export default function App() {
           // "Deseja saber algo mais?" is automatically asked right after the previous message
           enqueueBotResponse(
             'Deseja saber algo mais?',
-            16
+            16,
+            undefined,
+            undefined,
+            15000
           );
-        }
+        },
+        20000
       );
     } else if (chatStep === 11) {
+      // Step 11: Client typed something. Let's respond with the FedEx/DHL options.
       enqueueBotResponse(
-        'Todas opções de envio são possíveis desde que haja o producto ainda em stock e as despesas de envio por conta do cliente.',
-        12
+        'Tens opção de envio via FedEx e DHL disponivel com entrega de 5 a 7 dias uteis depois do empacotamento.',
+        12,
+        undefined,
+        undefined,
+        15000
       );
     } else if (chatStep === 12) {
+      // Step 12: Client typed something. Let's respond with the price difference / agency pickup / lithium battery cost.
       enqueueBotResponse(
-        'Confirmo que temos algumas unidades. Iremos contactar o departamento de enmpacotamentos e envio, iremos fazer contacto por email para dar os detalhes de pagamentos de frete.',
-        13
+        'O valor não se difere e a encomenda pode ser recebida mesmo na agência mais proxíma. O valor calculado devido a bateria de lítio presente neste equipamento é de 281,25USD.',
+        13,
+        undefined,
+        undefined,
+        20000
       );
     } else if (chatStep === 13) {
+      // Step 13: Client typed something. Respond with PayPal payment method.
       enqueueBotResponse(
-        'confrirma os contactos:\nWhatsapp: 846348589\nemail: florindoninepence@gmail.com',
-        14
+        'A via mais rápida de pagamento dado a urgência de envio é PayPall a transferência é imédiata e o comprovativo é gerado automaticamente.',
+        14,
+        undefined,
+        undefined,
+        15000
       );
     } else if (chatStep === 14) {
+      // Step 14: Client typed something. Respond with details about email receipt, compensation via discount, and shipping cost explanation.
       enqueueBotResponse(
-        'Todos dados serão enviados por email em até 1hora. Agradecemos por contactar e pedimos sinceras desculpas pelos transtornos causados',
+        'Em relação ao email enviado pelo endereço florindoninepence@gmai.com, acusamos a recepção e o caso está em estudo a partir do departamento de assistência ao cliente. Gostaríamos de informar que a única forma de compensasão são descontos consideráveis nas próximas compras. As dispesas solicitadas  para o envio é para empresas que trabalhamos em parceria, a frete grátis via navio é pelo facto de termos várias cargas com o mesmo destino usando o mesmo contentor. O preço pago pelo contentor é valor único independemente da carga.',
         15,
         undefined,
-        () => {
-          // "Deseja saber algo mais?" is automatically asked right after the previous message
-          enqueueBotResponse(
-            'Deseja saber algo mais?',
-            16
-          );
-        }
+        undefined,
+        20000
+      );
+    } else if (chatStep === 15) {
+      // Step 15: Client typed something. Respond with PayPal account locations, apology for delay, and "Mais alguma questão?"
+      enqueueBotResponse(
+        'A conta de pagamento PayPall pode ser encontrado no nosso site. Pedimos sinceras desculpas pelo atraso ao processar o seu caso. Estamos com um volume elevado de reclamações. Mais alguma questão?',
+        16,
+        undefined,
+        undefined,
+        20000
       );
     } else if (chatStep === 16) {
+      // Step 16: Client typed something. Show instructions.
       enqueueBotResponse(
-        'Atendimento encerrado. Obrigado por nos contactar!',
-        17
+        'Se desejar continuar com o reevio basta responder SIM e se desejar extorno do valo responda NÃO. Iremos começar o processo imediatamenta apos a sua resposta. Fique atento ao seu Whatsapp: 846348489\nemail: florindoninepence@gmail.com\nPedimos também que confira a página de spam no seu email, algumas mensagem pode não estar na caixa de entrada. Obrigado!',
+        17,
+        undefined,
+        undefined,
+        20000
+      );
+    } else if (chatStep === 17) {
+      // Step 17: Client typed SIM/NÃO. End the chat.
+      enqueueBotResponse(
+        'Chat encerrado...',
+        18,
+        undefined,
+        undefined,
+        15000
       );
     }
   };
@@ -261,16 +313,16 @@ export default function App() {
   const selectLanguage = (lang: string) => {
     if (isTyping) return;
     setChatMessages(prev => [...prev, { role: 'user', text: lang }]);
-    enqueueBotResponse('Qual é o seu nome de usuário?', 1);
+    enqueueBotResponse('Qual é o seu nome de usuário?', 1, undefined, undefined, 15000);
   };
 
   const selectAction = (action: string) => {
     if (isTyping) return;
     setChatMessages(prev => [...prev, { role: 'user', text: action }]);
     if (action === 'INFORMAÇÕES') {
-      enqueueBotResponse('O que deseja saber?', 11);
+      enqueueBotResponse('O que deseja saber?', 11, undefined, undefined, 15000);
     } else {
-      enqueueBotResponse('Indique o código do produto:', 4);
+      enqueueBotResponse('Indique o código do produto:', 4, undefined, undefined, 15000);
     }
   };
 
@@ -721,14 +773,14 @@ export default function App() {
                   <input 
                     type="text" 
                     className="flex-grow border border-gray-300 rounded-full px-4 py-2.5 outline-none focus:ring-2 focus:ring-ali-orange disabled:bg-gray-50 text-sm"
-                    placeholder={chatStep === 17 ? "Atendimento encerrado." : isTyping ? "Aguardando resposta..." : "Digite sua mensagem..."}
+                    placeholder={chatStep === 18 ? "Atendimento encerrado." : isTyping ? "Aguardando resposta..." : "Digite sua mensagem..."}
                     value={newMessage}
                     onChange={e => setNewMessage(e.target.value)}
-                    disabled={(chatStep === 0 && chatMessages.length === 2) || chatStep === 3 || isTyping || chatStep === 17}
+                    disabled={(chatStep === 0 && chatMessages.length === 2) || chatStep === 3 || isTyping || chatStep === 18}
                   />
                   <button 
                     type="submit"
-                    disabled={(chatStep === 0 && chatMessages.length === 2) || chatStep === 3 || isTyping || chatStep === 17}
+                    disabled={(chatStep === 0 && chatMessages.length === 2) || chatStep === 3 || isTyping || chatStep === 18}
                     className="bg-ali-orange text-white p-2.5 rounded-full hover:bg-ali-orange-hover transition-colors disabled:opacity-50 flex items-center justify-center flex-shrink-0"
                   >
                     <Send size={18} />
